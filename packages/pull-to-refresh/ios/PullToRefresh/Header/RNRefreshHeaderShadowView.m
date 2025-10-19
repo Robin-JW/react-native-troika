@@ -7,23 +7,23 @@
 
 - (instancetype)init {
     if (self = [super init]) {
-        // Header使用相对定位，不设置绝对位置
-        self.top = YGValueUndefined;
+        // Header不应占据布局空间，使用绝对定位并移出屏幕上方
+        self.top = (YGValue){-10000, YGUnitPoint};
         self.bottom = YGValueUndefined;
         self.left = YGValueZero;
         self.right = YGValueZero;
-        self.position = YGPositionTypeRelative;
+        self.position = YGPositionTypeAbsolute;
     }
     return self;
 }
 
 - (void)setLocalData:(RNRefreshHeaderLocalData *)localData {
-    // Header使用相对定位，让UI View控制实际位置
-    self.top = YGValueUndefined;
+    // 保持绝对定位，避免占位导致顶部空白
+    self.top = (YGValue){-10000, YGUnitPoint};
     self.bottom = YGValueUndefined;
     self.left = YGValueZero;
     self.right = YGValueZero;
-    self.position = YGPositionTypeRelative;
+    self.position = YGPositionTypeAbsolute;
 }
 
 @end
