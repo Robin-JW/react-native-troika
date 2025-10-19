@@ -36,11 +36,13 @@
         self.scrollView.bounces = YES;
         if (self.header) {
             [self.header removeFromSuperview];
+            // 将Header添加到ScrollView以确保能正确监听滚动事件
             [self.scrollView addSubview:self.header];
             self.header.scrollView = self.scrollView;
         }
         if (self.footer) {
             [self.footer removeFromSuperview];
+            // 将Footer添加到ScrollView以确保能正确监听滚动事件
             [self.scrollView addSubview:self.footer];
             self.footer.scrollView = self.scrollView;
         }

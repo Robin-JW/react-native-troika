@@ -5,7 +5,8 @@
 
 - (instancetype)init {
     if (self = [super init]) {
-        self.top = (YGValue){1000, YGUnitPoint};
+        // Footer应该初始化时就隐藏在屏幕下方
+        self.top = (YGValue){10000, YGUnitPoint};
         self.bottom = YGValueUndefined;
         self.left = YGValueZero;
         self.right = YGValueZero;
@@ -15,8 +16,8 @@
 }
 
 - (void)setLocalData:(RNRefreshFooterLocalData *)localData {
-    CGSize size = localData.scrollViewContentSize;
-    self.top = (YGValue){size.height, YGUnitPoint};
+    // Footer应该始终隐藏在屏幕下方，不要根据内容大小调整位置
+    self.top = (YGValue){10000, YGUnitPoint};
     self.bottom = YGValueUndefined;
     self.left = YGValueZero;
     self.right = YGValueZero;

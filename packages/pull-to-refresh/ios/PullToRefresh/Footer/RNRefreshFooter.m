@@ -40,6 +40,15 @@
 
 - (void)layoutSubviews {
     [super layoutSubviews];
+    
+    // 设置Footer的frame位置，确保默认状态下完全隐藏
+    if (self.scrollView && self.state != RNRefreshStateRefreshing) {
+        CGRect frame = self.frame;
+        // 非刷新状态时，隐藏在ScrollView内容底部之下
+        frame.origin.y = self.scrollView.contentSize.height;
+        self.frame = frame;
+    }
+    
     [self setLocalData];
     
     if (self.backgroundColor == nil) {
@@ -127,7 +136,9 @@
         
         if (self.scrollView.contentOffset.y >= minRange) {
             CGFloat offset = self.scrollView.contentOffset.y - minRange;
-            [self.bridge.eventDispatcher sendEvent:[[RNRefreshOffsetChangedEvent alloc] initWithViewTag:self.reactTag offset:offset]];
+            if (self.onOffsetChanged) {
+                self.onOffsetChanged(@{@"offset": @(offset)});
+            }
         }
         
         if (self.hidden || self.noMoreData) {
@@ -224,7 +235,9 @@
     RNRefreshState old = _state;
     _state = state;
 
-    [self.bridge.eventDispatcher sendEvent:[[RNRefreshStateChangedEvent alloc] initWithViewTag:self.reactTag refreshState:state]];
+    if (self.onStateChanged) {
+        self.onStateChanged(@{@"state": @(state)});
+    }
     
     if (state == RNRefreshStateIdle && old == RNRefreshStateRefreshing) {
         if (self.manual) {
@@ -237,7 +250,9 @@
         if (self.manual) {
             [self animateToRefreshingState];
         }
-        [self.bridge.eventDispatcher sendEvent:[[RNRefreshingEvent alloc] initWithViewTag:self.reactTag]];
+        if (self.onRefresh) {
+            self.onRefresh(@{});
+        }
         return;
     }
 }
@@ -272,7 +287,14 @@
 
 - (void)cancelRootViewTouches {
     RCTRootContentView *rootView = (RCTRootContentView *)_rootView;
-    [rootView.touchHandler cancel];
+    
+    // Check if the rootView responds to touchHandler before calling it
+    if ([rootView respondsToSelector:@selector(touchHandler)]) {
+        RCTTouchHandler *touchHandler = [rootView performSelector:@selector(touchHandler)];
+        if (touchHandler && [touchHandler respondsToSelector:@selector(cancel)]) {
+            [touchHandler cancel];
+        }
+    }
 }
 
 @end

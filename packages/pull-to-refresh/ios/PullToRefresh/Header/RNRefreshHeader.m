@@ -32,12 +32,24 @@
         _hasObserver = NO;
         _state = RNRefreshStateIdle;
         _bridge = bridge;
+        
+        // 移除初始化时的隐藏设置，保持与Footer一致
+        // self.hidden = YES;
     }
     return self;
 }
 
 - (void)layoutSubviews {
     [super layoutSubviews];
+    
+    // 设置Header的frame位置，确保默认状态下完全隐藏（与Footer逻辑一致）
+    if (self.scrollView && self.state != RNRefreshStateRefreshing) {
+        CGRect frame = self.frame;
+        // 非刷新状态时，隐藏在ScrollView内容顶部之上
+        frame.origin.y = -frame.size.height;
+        [super setFrame:frame];
+    }
+    
     [self setLocalData];
     
     if (self.backgroundColor == nil) {
@@ -58,11 +70,8 @@
 }
 
 - (void)setFrame:(CGRect)frame {
-    if (frame.origin.y != frame.size.height) {
-        [self setLocalData];
-        return;
-    }
     [super setFrame:frame];
+    [self setLocalData];
 }
 
 - (void)setLocalData {
@@ -116,8 +125,10 @@
         CGFloat offsetY = self.scrollView.contentOffset.y;
         CGFloat insetT = -self.scrollView.contentInset.top;
         
-        if (offsetY <= 0) {
-            [self.bridge.eventDispatcher sendEvent:[[RNRefreshOffsetChangedEvent alloc] initWithViewTag:self.reactTag offset:fabs(offsetY)]];
+        if (fabs(offsetY) > 0) {
+            if (self.onOffsetChanged) {
+                self.onOffsetChanged(@{@"offset": @(fabs(offsetY))});
+            }
         }
         
         if (self.state == RNRefreshStateRefreshing) {
@@ -132,10 +143,13 @@
         
         if (self.scrollView.isDragging) {
             [self cancelRootViewTouches];
+            // 拖拽过程中：只要向下（offsetY <= insetT），就显示Header；否则隐藏
+            self.hidden = !(offsetY <= insetT);
+            
             if (self.state == RNRefreshStateIdle && fabs(offsetY) >= range) {
                 self.state = RNRefreshStateComing;
-            } else
-            if (self.state == RNRefreshStateComing && fabs(offsetY) <= range) {
+            } else if (self.state == RNRefreshStateComing && fabs(offsetY) <= range) {
+                // 回退到未达临界，但仍在负offset范围内，保持显示由上面逻辑决定
                 self.state = RNRefreshStateIdle;
             }
             return;
@@ -194,8 +208,13 @@
         return;
     }
     
+    // 显隐改由offset观察者管理，避免在阈值回退时立刻隐藏
+    // 状态只负责触发刷新与事件回调
+    
     RCTLogInfo(@"[pull-to-refresh] publish comming event");
-    [self.bridge.eventDispatcher sendEvent:[[RNRefreshStateChangedEvent alloc] initWithViewTag:self.reactTag refreshState:state]];
+    if (self.onStateChanged) {
+        self.onStateChanged(@{@"state": @(state)});
+    }
 }
 
 - (void)settleToRefreshing {
@@ -203,8 +222,12 @@
     [self animateToRefreshingState:^(BOOL finished) {
         if (self.state == RNRefreshStateRefreshing) {
             RCTLogInfo(@"[pull-to-refresh] publish refresh event");
-            [self.bridge.eventDispatcher sendEvent:[[RNRefreshStateChangedEvent alloc] initWithViewTag:self.reactTag refreshState:RNRefreshStateRefreshing]];
-            [self.bridge.eventDispatcher sendEvent:[[RNRefreshingEvent alloc] initWithViewTag:self.reactTag]];
+            if (self.onStateChanged) {
+        self.onStateChanged(@{@"state": @(RNRefreshStateRefreshing)});
+    }
+    if (self.onRefresh) {
+        self.onRefresh(@{});
+    }
         }
     }];
 }
@@ -214,7 +237,9 @@
     [self animateToIdleState:^(BOOL finished) {
         if (self.state == RNRefreshStateIdle) {
             RCTLogInfo(@"[pull-to-refresh] publish idle event");
-            [self.bridge.eventDispatcher sendEvent:[[RNRefreshStateChangedEvent alloc] initWithViewTag:self.reactTag refreshState:RNRefreshStateIdle]];
+            if (self.onStateChanged) {
+        self.onStateChanged(@{@"state": @(RNRefreshStateIdle)});
+    }
         }
     }];
 }
@@ -224,10 +249,19 @@
         UIScrollView *scrollView = self.scrollView;
         UIEdgeInsets insets = scrollView.contentInset;
         scrollView.contentInset = UIEdgeInsetsMake(self.topInset, insets.left, insets.bottom, insets.right);
-    } completion:completion];
+    } completion:^(BOOL finished) {
+        // 回到空闲后，强制将Header移出可视区并隐藏，避免遮挡列表
+        CGRect frame = self.frame;
+        frame.origin.y = -frame.size.height;
+        [super setFrame:frame];
+        self.hidden = YES;
+        if (completion) { completion(finished); }
+    }];
 }
 
 - (void)animateToRefreshingState:(void (^ __nullable)(BOOL finished))completion {
+    // 移除hidden控制，保持与Footer一致
+    // self.hidden = NO;
     [UIView animateWithDuration:0.2 animations:^{
         UIScrollView *scrollView = self.scrollView;
         CGFloat range = scrollView.contentInset.top + self.bounds.size.height;
@@ -249,7 +283,14 @@
 
 - (void)cancelRootViewTouches {
     RCTRootContentView *rootView = (RCTRootContentView *)_rootView;
-    [rootView.touchHandler cancel];
+    
+    // Check if the rootView responds to touchHandler before calling it
+    if ([rootView respondsToSelector:@selector(touchHandler)]) {
+        RCTTouchHandler *touchHandler = [rootView performSelector:@selector(touchHandler)];
+        if (touchHandler && [touchHandler respondsToSelector:@selector(cancel)]) {
+            [touchHandler cancel];
+        }
+    }
 }
 
 @end
